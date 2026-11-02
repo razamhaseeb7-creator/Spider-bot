@@ -1,0 +1,21 @@
+name: BTC Signal Check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # har 15 minute, 24/7
+  workflow_dispatch:          # "Run workflow" button se manually bhi chala sakte ho
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ccxt pandas numpy
+      - run: python btc_telegram_bot.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
