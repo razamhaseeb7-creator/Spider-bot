@@ -1,12 +1,17 @@
 """
-BTC/USDT LIVE SIGNAL + TELEGRAM ALERT.
-Market check karta hai, aur agar mean-reversion signal mile to seedha
-Telegram par message bhej deta hai. Pehli baar chalane par ek "connected"
-test message bhi aayega, taaki pata chale sab sahi juda hai.
+BTC/USDT PAPER TRADING BOT (fake money, Telegram alerts).
+Har run par: agar koi open paper-trade nahi hai, signal check karta hai aur
+mile to "trade" khol deta hai (state.json me save). Agar pehle se ek trade
+khuli hai, check karta hai stop/target lagi ya nahi; lagi to band karke
+result trades_log.csv me likhta hai. Telegram par sirf tab message aata hai
+jab trade khulti ya band hoti hai - har run par spam nahi.
 
 Install:  pip install ccxt pandas numpy
 Run:      python btc_telegram_bot.py
 """
+import csv
+import json
+import os
 import urllib.request
 import urllib.parse
 import numpy as np
@@ -14,7 +19,6 @@ import pandas as pd
 
 # ---------------- Apna Telegram info yahan ----------------
 # GitHub Actions me ye secrets se aayega; Colab me yahi fallback values use hongi.
-import os
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "9080354745:AAG7KlDd_WH36W6OQGhOP3L7jtRRkZ4bLhQ")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8655880953")
 
@@ -26,6 +30,10 @@ BB_N, BB_K = 20, 2.0
 RSI_RANGE_MAX = 35
 ADX_RANGE_MAX = 20
 ATR_MULT = 1.5
+MAX_HOLD_BARS = 48          # 15m * 48 = 12 ghante, itne me target/stop na lage to time-exit
+
+STATE_FILE = "state.json"   # abhi koi open paper-trade hai ya nahi, yahan save hota hai
+LOG_FILE = "trades_log.csv"  # band hui saari trades ka record
 
 
 def send_telegram(text):
@@ -117,35 +125,84 @@ def bollinger(close, n, k):
     return mid - k * sd, mid, mid + k * sd
 
 
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    return {"position": None}
+
+
+def save_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+
+
+def log_trade(entry_time, exit_time, entry, exit_price, reason, pnl_pct):
+    is_new = not os.path.exists(LOG_FILE)
+    with open(LOG_FILE, "a", newline="") as f:
+        w = csv.writer(f)
+        if is_new:
+            w.writerow(["entry_time", "exit_time", "entry", "exit", "reason", "pnl_pct"])
+        w.writerow([entry_time, exit_time, f"{entry:.2f}", f"{exit_price:.2f}", reason, f"{pnl_pct:+.3f}"])
+
+
 if __name__ == "__main__":
-    send_telegram("Bot connected! BTC/USDT check kar raha hoon...")
+    state = load_state()
+    pos = state.get("position")
 
     d15 = fetch(SYMBOL, ENTRY_TF, LOOKBACK_DAYS)
     d1h = resample_1h(d15)
-
     d15["rsi"], d15["atr"] = rsi(d15["close"]), atr(d15)
     d15["bb_lower"], d15["bb_mid"], d15["bb_upper"] = bollinger(d15["close"], BB_N, BB_K)
     adx1h = adx(d1h)
 
     last = d15.iloc[-1]
     last_adx = adx1h.iloc[-1]
-    price = last["close"]
+    price = float(last["close"])
 
-    status = (f"BTC/USDT: ${price:,.2f}\n"
-              f"RSI: {last['rsi']:.1f} | 1H ADX: {last_adx:.1f}\n"
-              f"Lower Band: ${last['bb_lower']:,.2f} | Mid Band: ${last['bb_mid']:,.2f}")
-    print(status)
+    if pos is not None:
+        # ---- Ek paper-trade pehle se khuli hai: check karo band hui ya nahi ----
+        entry_time = pd.Timestamp(pos["entry_time"])
+        entry, stop, target = pos["entry"], pos["stop"], pos["target"]
+        since = d15[d15.index >= entry_time]
 
-    touch = last["low"] <= last["bb_lower"] and last["close"] > last["bb_lower"]
-    signal = touch and last["rsi"] < RSI_RANGE_MAX and last_adx < ADX_RANGE_MAX
+        reason = exit_price = exit_time = None
+        for idx, row in since.iterrows():
+            if row["low"] <= stop:
+                reason, exit_price, exit_time = "SL", stop, idx
+                break
+            if row["high"] >= target:
+                reason, exit_price, exit_time = "TARGET", target, idx
+                break
+        if reason is None and len(since) > MAX_HOLD_BARS:
+            reason, exit_price, exit_time = "TIME", price, d15.index[-1]
 
-    if signal:
-        stop = price - ATR_MULT * last["atr"]
-        target = last["bb_mid"]
-        msg = (f"SIGNAL: BUY\n{status}\n\n"
-               f"Entry: ${price:,.2f}\nStop: ${stop:,.2f}\nTarget: ${target:,.2f}")
-        print("\n>>> SIGNAL MILA <<<")
-        send_telegram(msg)
+        if reason:
+            pnl_pct = (exit_price - entry) / entry * 100
+            log_trade(entry_time, exit_time, entry, exit_price, reason, pnl_pct)
+            result = "WIN" if pnl_pct > 0 else "LOSS"
+            send_telegram(f"PAPER TRADE CLOSED ({result})\n"
+                          f"Entry: ${entry:,.2f} -> Exit: ${exit_price:,.2f}\n"
+                          f"Reason: {reason} | PnL: {pnl_pct:+.2f}%")
+            print(f"Trade band hui: {result}, {pnl_pct:+.2f}%")
+            state["position"] = None
+        else:
+            print(f"Trade abhi open hai. Entry {entry:.2f}, abhi price {price:.2f}")
+
     else:
-        print("\n>>> Abhi koi signal nahi <<<")
-        send_telegram(f"Abhi koi signal nahi.\n{status}")
+        # ---- Koi trade khuli nahi: naya signal check karo ----
+        touch = last["low"] <= last["bb_lower"] and last["close"] > last["bb_lower"]
+        signal = touch and last["rsi"] < RSI_RANGE_MAX and last_adx < ADX_RANGE_MAX
+
+        if signal:
+            stop = price - ATR_MULT * float(last["atr"])
+            target = float(last["bb_mid"])
+            state["position"] = {"entry": price, "stop": stop, "target": target,
+                                 "entry_time": str(d15.index[-1])}
+            send_telegram(f"PAPER TRADE OPENED\n"
+                          f"Entry: ${price:,.2f}\nStop: ${stop:,.2f}\nTarget: ${target:,.2f}")
+            print("Nayi paper-trade khol di.")
+        else:
+            print(f"Abhi koi signal nahi. Price {price:.2f}, RSI {last['rsi']:.1f}, ADX {last_adx:.1f}")
+
+    save_state(state)
