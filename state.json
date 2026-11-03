@@ -1,3 +1,15 @@
 {
-  "position": null
+  "position": null,
+  "BTC/USDT": {
+    "position": null
+  },
+  "ETH/USDT": {
+    "position": null
+  },
+  "SOL/USDT": {
+    "position": null
+  },
+  "_meta": {
+    "last_heartbeat": "2026-11-03 12:36:11.817239"
+  }
 }
