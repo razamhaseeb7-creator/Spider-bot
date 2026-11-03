@@ -2,7 +2,7 @@ name: BTC Signal Check
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # har 15 minute, 24/7
+    - cron: '*/5 * * * *'    # har 5 minute try karega (GitHub free pe exact guarantee nahi)
   workflow_dispatch:          # "Run workflow" button se manually bhi chala sakte ho
 
 permissions:
