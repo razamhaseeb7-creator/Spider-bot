@@ -4,7 +4,12 @@
     "position": null
   },
   "ETH/USDT": {
-    "position": null
+    "position": {
+      "entry": 2225.54,
+      "stop": 2219.7435229233397,
+      "target": 2231.7325,
+      "entry_time": "2026-11-08 21:00:00"
+    }
   },
   "SOL/USDT": {
     "position": null
