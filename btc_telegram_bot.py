@@ -29,7 +29,7 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8655880953")
 GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "razamhaseeb7@gmail.com")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "ionbluupremfpxeb")
 
-SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]   # yahan coins add/hatao kar sakte ho
+SYMBOLS = ["BTC/USDT"]   # yahan coins add/hatao kar sakte ho
 ENTRY_TF = "15m"
 LOOKBACK_DAYS = 10
 
