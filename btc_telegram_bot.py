@@ -13,8 +13,10 @@ Run:      python btc_telegram_bot.py
 import csv
 import json
 import os
+import smtplib
 import urllib.request
 import urllib.parse
+from email.mime.text import MIMEText
 import numpy as np
 import pandas as pd
 
@@ -22,6 +24,10 @@ import pandas as pd
 # GitHub Actions me ye secrets se aayega; Colab me yahi fallback values use hongi.
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "9080354745:AAG7KlDd_WH36W6OQGhOP3L7jtRRkZ4bLhQ")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8655880953")
+
+# ---------------- Email (Gmail) - Telegram na chale to bhi ye kaam karega ----------------
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "razamhaseeb7@gmail.com")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "ionbluupremfpxeb")
 
 SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]   # yahan coins add/hatao kar sakte ho
 ENTRY_TF = "15m"
@@ -39,13 +45,28 @@ HEARTBEAT_MINUTES = 60      # itni der me ek "sab theek hai" status message (tra
 
 
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": CHAT_ID, "text": text}).encode()
+    # ---- Telegram try karo (fail ho to bhi ruko mat, email try karenge) ----
     try:
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        data = urllib.parse.urlencode({"chat_id": CHAT_ID, "text": text}).encode()
         urllib.request.urlopen(url, data=data, timeout=10)
         print("Telegram par bhej diya.")
     except Exception as e:
-        print(f"Telegram message fail ho gaya: {e}")
+        print(f"Telegram message fail ho gaya (ignore, email try karenge): {e}")
+
+    # ---- Email (Gmail) bhi bhejo - Telegram na chale to bhi ye pahunch jayega ----
+    if GMAIL_ADDRESS and GMAIL_APP_PASSWORD:
+        try:
+            msg = MIMEText(text)
+            msg["Subject"] = "BTC Bot Alert"
+            msg["From"] = GMAIL_ADDRESS
+            msg["To"] = GMAIL_ADDRESS
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
+                server.send_message(msg)
+            print("Email bhej diya.")
+        except Exception as e:
+            print(f"Email bhi fail ho gaya: {e}")
 
 
 def _tf_ms(tf):
