@@ -1,12 +1,7 @@
 {
   "position": null,
   "BTC/USDT": {
-    "position": {
-      "entry": 63606.9,
-      "stop": 63236.182864950795,
-      "target": 64101.5,
-      "entry_time": "2026-11-18 14:45:00"
-    }
+    "position": null
   },
   "ETH/USDT": {
     "position": null
@@ -15,6 +10,6 @@
     "position": null
   },
   "_meta": {
-    "last_heartbeat": "2026-11-18 13:56:28.002175"
+    "last_heartbeat": "2026-11-18 15:54:46.757846"
   }
 }
